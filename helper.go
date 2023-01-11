@@ -49,6 +49,9 @@ func AutoMigrate() error {
 		methodNums := itemValue.NumMethod()
 		for i := 0; i < methodNums; i++ {
 			methodName := itemType.Method(i).Name
+			if methodName == "Version" {
+				continue
+			}
 			result := itemValue.MethodByName(methodName).Call([]reflect.Value{})
 			if len(result) == 0 {
 				continue
