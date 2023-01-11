@@ -85,7 +85,6 @@ func getVersion() int64 {
 	_, file, _, _ := runtime.Caller(1)
 	parse := regexp.MustCompile(`/([0-9]*?).go`)
 	parseArr := parse.FindAllStringSubmatch(file, -1)
-	fmt.Println(parseArr)
 	var version int64 = 0
 	if len(parseArr) > 0 {
 		if len(parseArr[0]) > 1 {
