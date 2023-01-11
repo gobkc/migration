@@ -6,6 +6,7 @@ type Migrates interface {
 	Run() string
 	Rollback() string
 	ChangeLog() string
+	Version() int64
 }
 
 type migrationsTable struct {

@@ -9,6 +9,10 @@ import (
 type insTest struct {
 }
 
+func (i *insTest) Version() int64 {
+	return 2
+}
+
 func (i *insTest) Run() string {
 	return "SELECT * FROM app limit 1"
 }
@@ -36,7 +40,7 @@ func TestAdd(t *testing.T) {
 			},
 		},
 	}
-	//dsn := "postgres://postgres:123456@localhost:5432/test?sslmode=disable"
+	//dsn := "postgres://postgres:123456@localhost:5432/configurator?sslmode=disable"
 	dsn := ""
 	if dsn == "" {
 		return

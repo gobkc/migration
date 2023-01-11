@@ -6,24 +6,23 @@ import (
 	"gorm.io/gorm"
 	"log"
 	"reflect"
-	"regexp"
-	"runtime"
-	"strconv"
 )
 
 // Add note
 // "ins" is a structure instance that implements migrates
 // No need to implement all methods
-func Add(ins Migrates) {
+func Add(ins ...Migrates) {
 	mig := newMigrate()
 	if mig.db == nil {
 		panic("not set Gorm connection")
 	}
-	version := getVersion()
-	mig.d = append(mig.d, migItem{
-		d:       ins,
-		version: version,
-	})
+	for _, in := range ins {
+		version := getVersion(in)
+		mig.d = append(mig.d, migItem{
+			d:       in,
+			version: version,
+		})
+	}
 }
 
 func SetGorm(db *gorm.DB) {
@@ -81,17 +80,12 @@ func findOrInitVersion() *migrationsTable {
 	return migTable
 }
 
-func getVersion() int64 {
-	_, file, _, _ := runtime.Caller(1)
-	parse := regexp.MustCompile(`/([0-9]*?).go`)
-	parseArr := parse.FindAllStringSubmatch(file, -1)
-	var version int64 = 0
-	if len(parseArr) > 0 {
-		if len(parseArr[0]) > 1 {
-			version, _ = strconv.ParseInt(parseArr[0][1], 10, 64)
-		}
+func getVersion(dest any) int64 {
+	versionCache := reflect.ValueOf(dest).MethodByName("Version").Call([]reflect.Value{})
+	if len(versionCache) == 0 {
+		return 0
 	}
-	return version
+	return versionCache[0].Int()
 }
 
 func checkStruct(dest any) error {
