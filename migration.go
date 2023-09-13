@@ -45,7 +45,7 @@ func (m *migrate) Run(sql string, version int64) error {
 		if rollBackErr := m.db.Exec(m.exec.rollBackSql).Error; rollBackErr != nil {
 			return rollBackErr
 		}
-		m.db.Exec("UPDATE public.migrations SET lastRollback = ? WHERE id = 1", time.Now().Local())
+		m.db.Exec("UPDATE public.migrations SET last_rollback = ? WHERE id = 1", time.Now().Local())
 		return err
 	}
 	err := m.db.Model(migrationsTable{}).Where("id=?", 1).Updates(migrationsTable{
