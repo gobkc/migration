@@ -2,6 +2,11 @@ package migration
 
 import "time"
 
+const (
+	TypeUp   = `up`
+	TypeDown = `down`
+)
+
 type Migrates interface {
 	Run() string
 	Rollback() string
