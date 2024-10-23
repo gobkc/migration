@@ -52,26 +52,32 @@ func Run(embFS embed.FS) {
 	}
 
 	parses := parseSql(embFS)
+	tx := gdb.Begin()
 	for _, pars := range parses {
 		if pars.Version > version && pars.Type == TypeUp {
-			if err = gdb.Exec(pars.SQL.String()).Error; err != nil {
+			if err = tx.Exec(pars.SQL.String()).Error; err != nil {
 				slog.Default().Error(`failed to migrate this version:`, slog.Int64(`version`, pars.Version), slog.String(`error`, err.Error()))
+				tx.Rollback()
 				os.Exit(0)
 			} else {
 				changeLog := strings.TrimSuffix(pars.ChangeLog.String(), "\n")
 				changeLog = strings.TrimPrefix(changeLog, "\n")
 
-				if err = gdb.Model(migrationsTable{}).Save(&migrationsTable{
+				if err = tx.Model(migrationsTable{}).Save(&migrationsTable{
 					Version:     pars.Version,
 					ChangeLog:   changeLog,
 					LastMigrate: time.Now().Local(),
 				}).Error; err != nil {
+					tx.Rollback()
 					slog.Default().Error(`failed to update migration table:`, slog.Int64(`version`, pars.Version), slog.String(`error`, err.Error()))
 					os.Exit(0)
 				}
 				slog.Info(`successfully migrated this version:`, slog.Int64(`version`, pars.Version))
 			}
 		}
+	}
+	if err := tx.Commit().Error; err != nil {
+		slog.Info(`failed to commit transaction:`, slog.String(`error`, err.Error()))
 	}
 }
 
