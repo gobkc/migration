@@ -1,70 +1,89 @@
 package migration
 
 import (
+	"embed"
 	"gorm.io/gorm"
-	"sort"
+	"log/slog"
+	"os"
+	"strings"
 	"sync"
 	"time"
 )
 
-var (
-	once sync.Once
-	m    *migrate
-)
+var gdb *gorm.DB
+var once sync.Once
 
-type migItem struct {
-	d       any
-	version int64
-}
-
-type execItem struct {
-	rollBackSql string
-	changeLog   string
-}
-
-type migrate struct {
-	d    []migItem
-	db   *gorm.DB
-	t    string // table
-	exec execItem
-}
-
-func newMigrate() *migrate {
+func Setting(callbacks ...func() *gorm.DB) {
 	once.Do(func() {
-		m = &migrate{}
+		gdb = &gorm.DB{}
+		for _, callback := range callbacks {
+			gdb = callback()
+		}
 	})
-	return m
 }
 
-func (m *migrate) Run(sql string, version int64) error {
-	defer func() {
-		m.exec = execItem{}
-	}()
-	if err := m.db.Exec(sql).Error; err != nil {
-		m.db.Exec("UPDATE public.migrations SET version = ? WHERE id = 1", version-1)
-		if rollBackErr := m.db.Exec(m.exec.rollBackSql).Error; rollBackErr != nil {
-			return rollBackErr
+func Run(embFS embed.FS) {
+	if gdb == nil {
+		slog.Default().Error(`Gorm DB is nil`)
+		return
+	}
+
+	if err := initMigrationTable(gdb); err != nil {
+		slog.Default().Error(`failed to init migration table:`, slog.String(`error`, err.Error()))
+		return
+	}
+
+	lastV, err := getLastVersion(gdb)
+	if err != nil {
+		for {
+			lastV, err = getLastVersion(gdb)
+			if err != nil {
+				slog.Default().Error(`failed to get last version:`, slog.String(`error`, err.Error()))
+				time.Sleep(3 * time.Second)
+				continue
+			}
+			break
 		}
-		m.db.Exec("UPDATE public.migrations SET last_rollback = ? WHERE id = 1", time.Now().Local())
+	}
+
+	var version int64 = 0
+	if len(lastV) > 0 {
+		version = lastV[0].Version
+	}
+
+	parses := parseSql(embFS)
+	for _, pars := range parses {
+		if pars.Version > version && pars.Type == TypeUp {
+			if err = gdb.Exec(pars.SQL.String()).Error; err != nil {
+				slog.Default().Error(`failed to migrate this version:`, slog.Int64(`version`, pars.Version), slog.String(`error`, err.Error()))
+				os.Exit(0)
+			} else {
+				changeLog := strings.TrimSuffix(pars.ChangeLog.String(), "\n")
+				changeLog = strings.TrimPrefix(changeLog, "\n")
+
+				if err = gdb.Model(migrationsTable{}).Save(&migrationsTable{
+					Version:     pars.Version,
+					ChangeLog:   changeLog,
+					LastMigrate: time.Now().Local(),
+				}).Error; err != nil {
+					slog.Default().Error(`failed to update migration table:`, slog.Int64(`version`, pars.Version), slog.String(`error`, err.Error()))
+					os.Exit(0)
+				}
+				slog.Info(`successfully migrated this version:`, slog.Int64(`version`, pars.Version))
+			}
+		}
+	}
+}
+
+func initMigrationTable(db *gorm.DB) error {
+	if err := db.AutoMigrate(&migrationsTable{}); err != nil {
 		return err
 	}
-	err := m.db.Model(migrationsTable{}).Where("id=?", 1).Updates(migrationsTable{
-		Version:   version,
-		ChangeLog: m.exec.changeLog,
-	}).Error
-	return err
+	return nil
 }
 
-func (m *migrate) Rollback(sql string, version int64) {
-	m.exec.rollBackSql = sql
-}
-
-func (m *migrate) ChangeLog(changeLog string, version int64) {
-	m.exec.changeLog = changeLog
-}
-
-func (m *migrate) toSort() {
-	sort.Slice(m.d, func(i, j int) bool {
-		return m.d[i].version <= m.d[j].version
-	})
+func getLastVersion(db *gorm.DB) (lastVersion []*migrationsTable, err error) {
+	model := migrationsTable{}
+	err = db.Model(model).Where(`version = (SELECT MAX(version) FROM ` + model.TableName() + `)`).Find(&lastVersion).Error
+	return lastVersion, err
 }
