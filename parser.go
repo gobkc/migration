@@ -77,7 +77,7 @@ func fileContentConvertToParseItem(b []byte) *ParseItem {
 		if len(newLine) == 0 {
 			continue
 		}
-		if bytes.HasPrefix(newLine, []byte("//")) {
+		if bytes.HasPrefix(newLine, []byte("//")) || bytes.HasPrefix(newLine, []byte("--")) {
 			item.ChangeLog.Write(bytes.TrimSpace(line[2:]))
 			item.ChangeLog.Write([]byte{10})
 		} else {

@@ -2,12 +2,13 @@ package migration
 
 import (
 	"embed"
-	"gorm.io/gorm"
 	"log/slog"
 	"os"
 	"strings"
 	"sync"
 	"time"
+
+	"gorm.io/gorm"
 )
 
 var gdb *gorm.DB
@@ -23,6 +24,12 @@ func Setting(callbacks ...func() *gorm.DB) {
 }
 
 func Run(embFS embed.FS) {
+	if err := acquireMigrationLock(gdb); err != nil {
+		slog.Default().Error("failed to acquire migration lock", slog.String("error", err.Error()))
+		return
+	}
+	defer releaseMigrationLock(gdb)
+
 	if gdb == nil {
 		slog.Default().Error(`Gorm DB is nil`)
 		return
@@ -92,4 +99,12 @@ func getLastVersion(db *gorm.DB) (lastVersion []*migrationsTable, err error) {
 	model := migrationsTable{}
 	err = db.Model(model).Where(`version = (SELECT MAX(version) FROM ` + model.TableName() + `)`).Find(&lastVersion).Error
 	return lastVersion, err
+}
+
+func acquireMigrationLock(db *gorm.DB) error {
+	return db.Exec("SELECT pg_advisory_lock(?)", 987654321).Error
+}
+
+func releaseMigrationLock(db *gorm.DB) error {
+	return db.Exec("SELECT pg_advisory_unlock(?)", 987654321).Error
 }
