@@ -1,4 +1,4 @@
-github.com/gobkc/migration v1.2.0 h1:FH+p3J92SgXH0YZzq49M59OBvqtH8Hv9b2UnLCmsZUY=
-github.com/gobkc/migration v1.2.0/go.mod h1:s+b3gKikcuilIHZnSCTfH6gsJBOqxfl7Q7JMenxFTYk=
+github.com/gobkc/migration v1.2.1 h1:K5opyhMvYaQzJvY1PRGvR2VGpRQqKvNKQQVZ6LFzUDY=
+github.com/gobkc/migration v1.2.1/go.mod h1:s+b3gKikcuilIHZnSCTfH6gsJBOqxfl7Q7JMenxFTYk=
 github.com/lib/pq v1.11.1 h1:wuChtj2hfsGmmx3nf1m7xC2XpK6OtelS2shMY+bGMtI=
 github.com/lib/pq v1.11.1/go.mod h1:/p+8NSbOcwzAEI7wiMXFlgydTwcgTr3OSKMsD2BitpA=
