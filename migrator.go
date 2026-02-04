@@ -68,7 +68,12 @@ func (m *Migrator) Up(ctx context.Context) error {
 		}
 
 		isBaseline := mig.Version == types.BaseLineVersion
+		skip := false
 		if c, ok := applied[mig.Version]; ok {
+			skip = true
+			if c == mig.Checksum && isBaseline {
+				continue
+			}
 			if c != mig.Checksum {
 				if isBaseline == false {
 					return ErrChecksumMismatch
@@ -78,7 +83,7 @@ func (m *Migrator) Up(ctx context.Context) error {
 			}
 		}
 
-		if err := m.apply(ctx, mig, isBaseline); err != nil {
+		if err := m.apply(ctx, mig, skip); err != nil {
 			return err
 		}
 	}
