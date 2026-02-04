@@ -4,6 +4,7 @@ import (
 	"context"
 	"database/sql"
 	"fmt"
+	"log/slog"
 	"time"
 
 	"github.com/gobkc/migration/dialect"
@@ -46,7 +47,8 @@ func (m *Migrator) Up(ctx context.Context) error {
 	}
 
 	if !locked {
-		return ErrLocked
+		slog.Error(`failed to migrate database`, slog.String(`err`, ErrLocked.Error()))
+		return nil
 	}
 
 	defer unlock(m.db)
