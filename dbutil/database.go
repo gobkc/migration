@@ -2,14 +2,12 @@ package dbutil
 
 import (
 	"context"
-	"errors"
 	"fmt"
 	"log/slog"
 	"net/url"
 	"strings"
 	"time"
 
-	"github.com/jackc/pgconn"
 	"github.com/jackc/pgx/v5"
 )
 
@@ -55,21 +53,16 @@ func EnsureDatabase(dsn string) error {
 	createSQL := "CREATE DATABASE " + quoteIdentifier(dbName)
 
 	_, err = conn.Exec(ctx, createSQL)
-	if err == nil {
-		slog.Info("database created", "db", dbName)
-		return nil
+	if err != nil {
+		slog.Warn("database created by another instance",
+			slog.String(`db`, dbName),
+			slog.String(`err`, err.Error()),
+		)
 	}
 
-	var pgErr *pgconn.PgError
-	if errors.As(err, &pgErr) {
-		switch pgErr.Code {
-		case `42P04`, `23505`:
-			slog.Warn("database created by another instance", "db", dbName, "code", pgErr.Code)
-			return nil
-		}
-	}
+	slog.Info("database created", "db", dbName)
 
-	return fmt.Errorf("create database failed: %w", err)
+	return nil
 }
 
 func quoteIdentifier(name string) string {
