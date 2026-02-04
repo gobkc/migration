@@ -19,7 +19,7 @@ import (
 var Files embed.FS
 
 func TestNewMigrator(t *testing.T) {
-	dsn := `postgres://postgres:postgres@cfg-envs:5432/%s`
+	dsn := `postgres://postgres:postgres@localhost:5432/%s`
 	db, err := sql.Open("postgres", fmt.Sprintf(dsn, `?sslmode=disable`))
 	if err != nil {
 		panic(err)
