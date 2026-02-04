@@ -61,9 +61,12 @@ func EnsureDatabase(dsn string) error {
 	}
 
 	var pgErr *pgconn.PgError
-	if errors.As(err, &pgErr) && pgErr.Code == "42P04" {
-		slog.Warn("database created by another instance", "db", dbName)
-		return nil
+	if errors.As(err, &pgErr) {
+		switch pgErr.Code {
+		case `42P04`, `23505`:
+			slog.Warn("database created by another instance", "db", dbName, "code", pgErr.Code)
+			return nil
+		}
 	}
 
 	return fmt.Errorf("create database failed: %w", err)
