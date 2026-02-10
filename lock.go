@@ -2,6 +2,7 @@ package migration
 
 import (
 	"database/sql"
+	"strings"
 )
 
 func tryLock(db *sql.DB) (bool, error) {
@@ -13,6 +14,9 @@ func tryLock(db *sql.DB) (bool, error) {
     `)
 
 	if err != nil {
+		if strings.Contains(err.Error(), "42703") {
+			return true, nil
+		}
 		return false, nil // duplicate = locked
 	}
 
