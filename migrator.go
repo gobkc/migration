@@ -34,7 +34,7 @@ func (m *Migrator) Up(ctx context.Context) error {
 
 	dirty, err := isDirty(m.db)
 	if err != nil {
-		return err
+		slog.Warn(`query dirty record`, slog.String(`warn`, err.Error()))
 	}
 
 	if dirty {
