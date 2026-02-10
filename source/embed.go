@@ -25,7 +25,7 @@ func (e *Embed) Migrations() ([]types.Migration, error) {
 	return parseMigrations(e.FS)
 }
 
-var filePattern = regexp.MustCompile(`^(\d+)_(.+)\.(up|down)\.sql$`)
+var filePattern = regexp.MustCompile(`^(\d+)_(.+)\.(up|down|holding)\.sql$`)
 
 func parseMigrations(efs embed.FS) ([]types.Migration, error) {
 	var list []types.Migration

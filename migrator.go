@@ -65,6 +65,21 @@ func (m *Migrator) Up(ctx context.Context) error {
 
 	for _, mig := range migrations {
 
+		// if Direction is holding, then only execute holding migrations(this migration SQL will always be executed)
+		if mig.Direction == `holding` {
+			tx, err := m.db.BeginTx(ctx, nil)
+			if err != nil {
+				return err
+			}
+			defer tx.Rollback()
+			slog.Info("executing holding migration", "version", mig.Version)
+			fmt.Println("sql:\n", mig.SQL)
+			if _, err := tx.ExecContext(ctx, mig.SQL); err != nil {
+				return err
+			}
+			tx.Commit()
+		}
+
 		if mig.Direction != "up" {
 			continue
 		}
