@@ -63,8 +63,10 @@ func (m *Migrator) Up(ctx context.Context) error {
 		return err
 	}
 
-	for _, mig := range migrations {
+	// reinitialize migrations & applied
+	reinitialize := false
 
+	for _, mig := range migrations {
 		// if Direction is holding, then only execute holding migrations(this migration SQL will always be executed)
 		if mig.Direction == `holding` {
 			tx, err := m.db.BeginTx(ctx, nil)
@@ -78,8 +80,22 @@ func (m *Migrator) Up(ctx context.Context) error {
 				return err
 			}
 			tx.Commit()
+			reinitialize = true
+		}
+	}
+	if reinitialize {
+		migrations, err = m.source.Migrations()
+		if err != nil {
+			return err
 		}
 
+		applied, err = getApplied(m.db)
+		if err != nil {
+			return err
+		}
+	}
+
+	for _, mig := range migrations {
 		if mig.Direction != "up" {
 			continue
 		}
@@ -93,7 +109,12 @@ func (m *Migrator) Up(ctx context.Context) error {
 			}
 			if c != mig.Checksum {
 				if isBaseline == false {
-					return ErrChecksumMismatch
+					slog.Warn(ErrChecksumMismatch.Error(),
+						slog.Int64(`version`, mig.Version),
+						slog.String(`esists sum`, c),
+						slog.String(`new sum`, mig.Checksum),
+					)
+					continue
 				}
 			} else {
 				continue

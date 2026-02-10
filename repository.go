@@ -3,6 +3,7 @@ package migration
 import (
 	"database/sql"
 	"fmt"
+	"strings"
 
 	"github.com/gobkc/migration/dialect"
 )
@@ -44,6 +45,9 @@ func getApplied(db *sql.DB) (map[int64]string, error) {
         WHERE version > -1
     `)
 	if err != nil {
+		if strings.Contains(err.Error(), "42703") {
+			return make(map[int64]string), nil
+		}
 		return nil, err
 	}
 	defer rows.Close()
