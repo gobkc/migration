@@ -25,7 +25,8 @@ func (e *Embed) Migrations() ([]types.Migration, error) {
 	return parseMigrations(e.FS)
 }
 
-var filePattern = regexp.MustCompile(`^(\d+)_(.+)\.(up|down|holding)\.sql$`)
+// 支持 final
+var filePattern = regexp.MustCompile(`^(\d+)_(.+)\.(up|down|holding|final)\.sql$`)
 
 func parseMigrations(efs embed.FS) ([]types.Migration, error) {
 	var list []types.Migration
@@ -48,8 +49,6 @@ func parseMigrations(efs embed.FS) ([]types.Migration, error) {
 			return err
 		}
 
-		changeLog := getChangelog(raw)
-
 		sql := string(raw)
 
 		list = append(list, types.Migration{
@@ -57,7 +56,7 @@ func parseMigrations(efs embed.FS) ([]types.Migration, error) {
 			Direction: direction,
 			SQL:       sql,
 			Checksum:  checksum(sql),
-			ChangeLog: changeLog,
+			ChangeLog: getChangelog(raw),
 		})
 
 		return nil
@@ -68,10 +67,29 @@ func parseMigrations(efs embed.FS) ([]types.Migration, error) {
 	}
 
 	sort.Slice(list, func(i, j int) bool {
+		// ⭐⭐⭐⭐⭐ note：
+		// if version as the same → holding first, final last
+		if list[i].Version == list[j].Version {
+			return priority(list[i].Direction) < priority(list[j].Direction)
+		}
+
 		return list[i].Version < list[j].Version
 	})
 
 	return list, nil
+}
+
+func priority(dir string) int {
+	switch dir {
+	case types.Holding:
+		return 0
+	case types.Up:
+		return 1
+	case types.Final:
+		return 2
+	default:
+		return 3
+	}
 }
 
 func checksum(sql string) string {
@@ -83,15 +101,19 @@ func getChangelog(b []byte) string {
 	var changeLog bytes.Buffer
 	b = bytes.ReplaceAll(b, []byte("\r\n"), []byte("\n"))
 	lines := bytes.SplitSeq(b, []byte("\n"))
+
 	for line := range lines {
 		newLine := bytes.TrimSpace(line)
+
 		if len(newLine) == 0 {
 			continue
 		}
+
 		if bytes.HasPrefix(newLine, []byte("//")) || bytes.HasPrefix(newLine, []byte("--")) {
 			changeLog.Write(bytes.TrimSpace(line[2:]))
 			changeLog.Write([]byte{10})
 		}
 	}
+
 	return changeLog.String()
 }

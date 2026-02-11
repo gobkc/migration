@@ -9,3 +9,10 @@ type Migration struct {
 }
 
 const BaseLineVersion int64 = 0
+
+const (
+	Up      = "up"
+	Down    = "down"
+	Holding = "holding"
+	Final   = "final"
+)
