@@ -1,10 +1,13 @@
 package migration
 
 import (
+	"bytes"
 	"context"
 	"database/sql"
 	"fmt"
 	"log/slog"
+	"maps"
+	"text/template"
 	"time"
 
 	"github.com/gobkc/migration/dialect"
@@ -13,20 +16,22 @@ import (
 )
 
 type Migrator struct {
-	db      *sql.DB
-	dialect dialect.Dialect
-	source  source.Source
+	db        *sql.DB
+	dialect   dialect.Dialect
+	source    source.Source
+	variables map[string]any
 }
 
 func New(db *sql.DB, d dialect.Dialect, s source.Source) *Migrator {
 	return &Migrator{
-		db:      db,
-		dialect: d,
-		source:  s,
+		db:        db,
+		dialect:   d,
+		source:    s,
+		variables: make(map[string]any),
 	}
 }
 
-func (m *Migrator) Up(ctx context.Context) error {
+func (m *Migrator) Up(ctx context.Context, opts ...Option) error {
 
 	if err := ensureTable(m.db, m.dialect); err != nil {
 		return err
@@ -69,7 +74,6 @@ func (m *Migrator) Up(ctx context.Context) error {
 
 	// ⭐⭐⭐⭐⭐ STEP 1 — holding（forever）
 	for _, mig := range migrations {
-
 		if mig.Direction != types.Holding {
 			continue
 		}
@@ -148,6 +152,8 @@ func (m *Migrator) apply(ctx context.Context, mig types.Migration) error {
 		return err
 	}
 
+	mig.SQL = m.replaceSql(mig.SQL)
+
 	if _, err := tx.ExecContext(ctx, mig.SQL); err != nil {
 		tx.Rollback()
 		return err
@@ -176,6 +182,7 @@ func (m *Migrator) execStateless(ctx context.Context, mig types.Migration) error
 		return err
 	}
 
+	mig.SQL = m.replaceSql(mig.SQL)
 	if _, err := tx.ExecContext(ctx, mig.SQL); err != nil {
 		tx.Rollback()
 		return fmt.Errorf("migration %d (%s) failed: %w",
@@ -186,6 +193,33 @@ func (m *Migrator) execStateless(ctx context.Context, mig types.Migration) error
 	}
 
 	return tx.Commit()
+}
+
+// replace variables
+func (m *Migrator) replaceSql(raw string) (result string) {
+	result = raw
+	if len(m.variables) <= 0 {
+		return
+	}
+	tmpl, err := template.New(``).Parse(raw)
+	if err != nil {
+		slog.Warn(`failed to replace variables in the sql`,
+			slog.String(`sql`, raw),
+			slog.Any(`variables`, m.variables),
+		)
+		return
+	}
+	var buf bytes.Buffer
+	err = tmpl.Execute(&buf, m.variables)
+	if err != nil {
+		slog.Warn(`failed to replace variables in the sql`,
+			slog.String(`sql`, raw),
+			slog.Any(`variables`, m.variables),
+		)
+		return
+	}
+	result = buf.String()
+	return
 }
 
 func hasMigrationBeyondBaseline(db *sql.DB) (bool, error) {
@@ -199,4 +233,12 @@ func hasMigrationBeyondBaseline(db *sql.DB) (bool, error) {
     `).Scan(&exists)
 
 	return exists, err
+}
+
+type Option func(*Migrator)
+
+func WithVariables(vars map[string]any) Option {
+	return func(m *Migrator) {
+		maps.Copy(m.variables, vars)
+	}
 }
