@@ -68,3 +68,45 @@ func EnsureDatabase(dsn string) error {
 func quoteIdentifier(name string) string {
 	return `"` + strings.ReplaceAll(name, `"`, `""`) + `"`
 }
+
+type ParseDSNInfo struct {
+	User     string
+	Password string
+	Host     string
+	Port     string
+	DBName   string
+	Params   map[string]string
+}
+
+// ParseDSN parse database DSN
+func ParseDSN(dsn string) (*ParseDSNInfo, error) {
+	u, err := url.Parse(dsn)
+	if err != nil {
+		return nil, err
+	}
+
+	info := &ParseDSNInfo{
+		Params: make(map[string]string),
+	}
+	if u.User != nil {
+		info.User = u.User.Username()
+		info.Password, _ = u.User.Password()
+	}
+	host := u.Host
+	if strings.Contains(host, ":") {
+		parts := strings.Split(host, ":")
+		info.Host = parts[0]
+		info.Port = parts[1]
+	} else {
+		info.Host = host
+	}
+	info.DBName = strings.TrimPrefix(u.Path, "/")
+
+	for k, v := range u.Query() {
+		if len(v) > 0 {
+			info.Params[k] = v[0]
+		}
+	}
+
+	return info, nil
+}
