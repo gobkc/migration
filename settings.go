@@ -2,7 +2,6 @@ package migration
 
 import (
 	"database/sql"
-	"maps"
 	"sync"
 
 	"github.com/gobkc/migration/dialect"
@@ -13,21 +12,20 @@ var once sync.Once
 var migrator = &Migrator{}
 
 type Options struct {
-	Db        *sql.DB
-	Dialect   dialect.Dialect
-	Source    source.Source
-	Variables map[string]any
+	Db      *sql.DB
+	Dialect dialect.Dialect
+	Source  source.Source
 }
 
-func Settings(callbacks ...func(options *Options) *Migrator) {
+func Settings(callbacks ...func(options *Options)) *Migrator {
 	once.Do(func() {
-		var opts = &Options{Variables: make(map[string]any)}
+		var opts = &Options{}
 		for _, callback := range callbacks {
-			migrator = callback(opts)
+			callback(opts)
 			migrator.db = opts.Db
 			migrator.dialect = opts.Dialect
 			migrator.source = opts.Source
-			maps.Copy(migrator.variables, opts.Variables)
 		}
 	})
+	return migrator
 }
