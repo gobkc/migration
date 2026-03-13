@@ -13,21 +13,21 @@ var once sync.Once
 var migrator = &Migrator{}
 
 type Options struct {
-	db        *sql.DB
-	dialect   dialect.Dialect
-	source    source.Source
-	variables map[string]any
+	Db        *sql.DB
+	Dialect   dialect.Dialect
+	Source    source.Source
+	Variables map[string]any
 }
 
 func Settings(callbacks ...func(options *Options) *Migrator) {
 	once.Do(func() {
-		var opts = &Options{variables: make(map[string]any)}
+		var opts = &Options{Variables: make(map[string]any)}
 		for _, callback := range callbacks {
 			migrator = callback(opts)
-			migrator.db = opts.db
-			migrator.dialect = opts.dialect
-			migrator.source = opts.source
-			maps.Copy(migrator.variables, opts.variables)
+			migrator.db = opts.Db
+			migrator.dialect = opts.Dialect
+			migrator.source = opts.Source
+			maps.Copy(migrator.variables, opts.Variables)
 		}
 	})
 }
