@@ -32,7 +32,9 @@ func New(db *sql.DB, d dialect.Dialect, s source.Source) *Migrator {
 }
 
 func (m *Migrator) Up(ctx context.Context, opts ...Option) error {
-
+	for _, opt := range opts {
+		opt(m)
+	}
 	if err := ensureTable(m.db, m.dialect); err != nil {
 		return err
 	}
@@ -239,6 +241,9 @@ type Option func(*Migrator)
 
 func WithVariables(vars map[string]any) Option {
 	return func(m *Migrator) {
+		if m.variables == nil {
+			m.variables = make(map[string]any)
+		}
 		maps.Copy(m.variables, vars)
 	}
 }
