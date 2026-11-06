@@ -2,20 +2,20 @@
 # Go Migration Library
 
 A lightweight, production-ready Golang database migration library supporting **PostgreSQL** and **MySQL**.  
-Designed for multi-Pod, cloud-native environments, **no extra lock table required**, with cross-database locking, dirty protection, checksum verification, and execution time tracking.
+Designed for multi-Pod, cloud-native environments, **no extra lock table required**, with database-native locking, dirty protection, checksum verification, and execution time tracking.
 
 ---
 
 ## Features
 
 - ✅ Supports PostgreSQL and MySQL  
-- ✅ Cross-database safe lock without a separate lock table  
+- ✅ Database-native locking across Pods (Postgres advisory locks, MySQL GET_LOCK)
 - ✅ Dirty state protection to prevent incomplete migrations  
 - ✅ File checksum verification to prevent SQL tampering  
 - ✅ Supports embed.FS or custom Source  
 - ✅ Execution time tracking for each migration  
 - ✅ Up / Down migration support  
-- ✅ Extensible Dialect for different databases  
+- ✅ Extensible Dialect for different databases (implement `Dialect` + `dialect.Locker`)  
 - ✅ Suitable for multi-Pod deployments  
 
 ---
@@ -135,9 +135,10 @@ func (m *Migrator) Up(ctx context.Context) error
 
 3. **Locking mechanism**
 
-   * Uses `version = -1` as a leader row for cross-Pod locking.
-   * Only one instance can execute migrations at a time.
-   * Conflicts or failures will return `ErrLocked`.
+   * PostgreSQL uses `pg_advisory_lock`, scoped to the current database.
+   * MySQL uses `GET_LOCK`, scoped by a hash of the current database name.
+   * Concurrent instances wait for the lock holder to finish, so holding and final migrations are serialized.
+   * Custom dialects must implement `dialect.Locker`.
 
 4. **Multi-Pod deployment recommendation**
 
@@ -150,18 +151,18 @@ func (m *Migrator) Up(ctx context.Context) error
 
 6. **Dialect extension**
 
-   * To support other databases, implement the `Dialect` interface.
+   * To support other databases, implement the `Dialect` interface and the `dialect.Locker` interface.
 
 ---
 
 ## Table Structure
 
 ```sql
-CREATE TABLE schema_migrations (
+CREATE TABLE migrations (
     version BIGINT PRIMARY KEY,
     checksum VARCHAR(64) NOT NULL,
     applied_at TIMESTAMP NOT NULL,
-    execution_time_s BIGINT NOT NULL,
+    execution_time_s DOUBLE PRECISION NOT NULL,
     dirty BOOLEAN NOT NULL
 );
 ```
@@ -169,10 +170,8 @@ CREATE TABLE schema_migrations (
 * `version`: migration version
 * `checksum`: SHA256 checksum of SQL file
 * `applied_at`: applied timestamp
-* `execution_time_s`: execution duration in milliseconds
+* `execution_time_s`: execution duration in seconds
 * `dirty`: flag indicating migration not completed
-
-> `version = -1` is used as a lock row.
 
 ---
 

@@ -35,6 +35,23 @@ func (m *Migrator) Up(ctx context.Context, opts ...Option) error {
 	for _, opt := range opts {
 		opt(m)
 	}
+
+	locker, ok := m.dialect.(dialect.Locker)
+	if !ok {
+		return ErrLockUnsupported
+	}
+	unlock, err := locker.Lock(ctx, m.db)
+	if err != nil {
+		return err
+	}
+	defer func() {
+		unlockCtx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+		defer cancel()
+		if err := unlock(unlockCtx); err != nil {
+			slog.Warn(`failed to release migration lock`, slog.String(`err`, err.Error()))
+		}
+	}()
+
 	if err := ensureTable(m.db, m.dialect); err != nil {
 		return err
 	}
@@ -48,28 +65,7 @@ func (m *Migrator) Up(ctx context.Context, opts ...Option) error {
 		return ErrDirtyDatabase
 	}
 
-	locked, err := tryLock(m.db)
-	if err != nil {
-		return err
-	}
-
-	if !locked {
-		return ErrLocked
-	}
-
-	defer unlock(m.db)
-
 	migrations, err := m.source.Migrations()
-	if err != nil {
-		return err
-	}
-
-	applied, err := getApplied(m.db)
-	if err != nil {
-		return err
-	}
-
-	hasBeyondBaseline, err := hasMigrationBeyondBaseline(m.db)
 	if err != nil {
 		return err
 	}
@@ -83,6 +79,16 @@ func (m *Migrator) Up(ctx context.Context, opts ...Option) error {
 		if err := m.execStateless(ctx, mig); err != nil {
 			return err
 		}
+	}
+
+	applied, err := getApplied(m.db)
+	if err != nil {
+		return err
+	}
+
+	hasBeyondBaseline, err := hasMigrationBeyondBaseline(m.db)
+	if err != nil {
+		return err
 	}
 
 	// ⭐⭐⭐⭐⭐ STEP 2 — up / baseline

@@ -8,14 +8,14 @@
 # Go Migration Library
 
 一个轻量级、工业级的 Golang 数据库迁移库，支持 **PostgreSQL** 和 **MySQL**。  
-专为多 Pod、云原生环境设计，**无需额外 lock 表**，支持跨数据库锁、dirty 防护、checksum 校验和 execution time 记录。
+专为多 Pod、云原生环境设计，**无需额外 lock 表**，支持数据库原生锁、dirty 防护、checksum 校验和 execution time 记录。
 
 ---
 
 ## 特性
 
 - ✅ 支持 PostgreSQL 与 MySQL
-- ✅ 跨数据库安全锁（无需 lock 表）
+- ✅ 数据库原生锁（PostgreSQL advisory lock / MySQL GET_LOCK）
 - ✅ dirty 状态防止中断迁移造成数据库不一致
 - ✅ 文件 checksum 校验，防止已执行 SQL 被修改
 - ✅ 支持 embed.FS 或自定义 Source
@@ -139,9 +139,10 @@ func (m *Migrator) Up(ctx context.Context) error
 
 3. **锁机制**
 
-   * 使用 `version = -1` 的 leader row 实现跨 Pod 安全锁
-   * 只有一个实例可以执行迁移
-   * 失败或冲突时会返回 `ErrLocked`
+   * PostgreSQL 使用 `pg_advisory_lock`，按当前数据库隔离
+   * MySQL 使用 `GET_LOCK`，按当前数据库名的哈希隔离
+   * 并发实例会等待持锁实例完成，holding / final migration 串行执行
+   * 自定义 Dialect 必须实现 `dialect.Locker`
 
 4. **多 Pod 部署建议**
 
@@ -155,7 +156,7 @@ func (m *Migrator) Up(ctx context.Context) error
 
 6. **Dialect 扩展**
 
-   * 如需支持其他数据库，可实现 `Dialect` 接口
+   * 如需支持其他数据库，需实现 `Dialect` 与 `dialect.Locker` 接口
 
 ---
 
@@ -166,7 +167,7 @@ CREATE TABLE migrations (
     version BIGINT PRIMARY KEY,
     checksum VARCHAR(64) NOT NULL,
     applied_at TIMESTAMP NOT NULL,
-    execution_time_s BIGINT NOT NULL,
+    execution_time_s DOUBLE PRECISION NOT NULL,
     dirty BOOLEAN NOT NULL
 );
 ```
@@ -174,10 +175,8 @@ CREATE TABLE migrations (
 * `version`：迁移版本
 * `checksum`：SQL 文件 SHA256 校验码
 * `applied_at`：执行时间
-* `execution_time_s`：执行耗时
+* `execution_time_s`：执行耗时（秒）
 * `dirty`：迁移未完成标记
-
-> `version = -1` 用作锁
 
 ---
 
